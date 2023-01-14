@@ -8,6 +8,7 @@ import frc.robot.Constants.OperatorConstants;
 import frc.robot.commands.Autos;
 import frc.robot.commands.ExampleCommand;
 import frc.robot.commands.TestMotorsCommand;
+import frc.robot.commands.ZeroWheelHeading;
 import frc.robot.subsystems.DriveSubsystem;
 import frc.robot.subsystems.ExampleSubsystem;
 import frc.robot.subsystems.SmartDashboardSubsystem;
@@ -69,6 +70,11 @@ public class RobotContainer {
 
     new JoystickButton(driveStick, 12)
         .onTrue(new InstantCommand(RobotContainer.driveSubsystem::stopCurrentMotors));
+
+    new JoystickButton(driveStick, 9)
+        .onTrue(new ZeroWheelHeading())
+        .onFalse(new InstantCommand(RobotContainer.driveSubsystem::stopCurrentMotors)); 
+      
 
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
     // cancelling on release.

@@ -17,6 +17,10 @@ public class SmartDashboardSubsystem extends SubsystemBase {
     for (int i=1;i<9;i++) {
       SmartDashboard.putNumber("Motor " + i + " Encoder Value", RobotContainer.driveSubsystem.getDriveEncoder(i));
       SmartDashboard.putNumber("Motor " + i + " Encoder Speed", RobotContainer.driveSubsystem.getDriveEncoderSpeed(i));
+
+      if (i%2==0){
+        SmartDashboard.putNumber("Motor " + i + " Abs Encoder Value", RobotContainer.driveSubsystem.getDriveAbsEncoder(i));
+      }
     }
 
     SmartDashboard.putString("Module:",RobotContainer.driveSubsystem.getCurrentModule());

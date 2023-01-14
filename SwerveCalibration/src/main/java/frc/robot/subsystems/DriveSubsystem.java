@@ -4,6 +4,8 @@
 
 package frc.robot.subsystems;
 
+import com.ctre.phoenix.motorcontrol.StatusFrame;
+import com.ctre.phoenix.motorcontrol.TalonFXFeedbackDevice;
 import com.ctre.phoenix.motorcontrol.TalonSRXControlMode;
 import com.ctre.phoenix.motorcontrol.TalonSRXFeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
@@ -20,16 +22,52 @@ public class DriveSubsystem extends SubsystemBase {
 
   public WPI_TalonSRX[] motor = new WPI_TalonSRX[9];
 
+  // Absolute encoder setup
+  final boolean kDiscontinuityPresent = true;
+	final int kBookEnd_0 = 910;		/* 80 deg */
+	final int kBookEnd_1 = 1137;	/* 100 deg */
+  /* Nonzero to block the config until success, zero to skip checking */
+  final int kTimeoutMs = 30;
+  final int[] wheelZeroAngleValues = {0, 0, 3489, 0, 3307, 0, 433, 0, 3268};
+  public final int turnPIDTolerance = 3; 
+
+  final int clicksSRXPerFullRotation = 4096; 
 
   public DriveSubsystem() {
+
     for (int i=1;i<9;i++) {
       motor[i] = new WPI_TalonSRX(i);
       motor[i].configFactoryDefault();
       motor[i].setSafetyEnabled(false);
+
       if (i%2 != 0) {   // Odd numbers are drive motors
         motor[i].configSelectedFeedbackSensor(TalonSRXFeedbackDevice.CTRE_MagEncoder_Relative, 0, 30);
-      } else {   // even motors are relative
+      } 
+      
+      else {   // even motors are relative
         motor[i].configSelectedFeedbackSensor(TalonSRXFeedbackDevice.CTRE_MagEncoder_Absolute, 0, 30);
+
+        // Absolute encoder configuration
+        initQuadrature(i);
+
+        double selSenPos = motor[i].getSelectedSensorPosition(0);
+		    int pulseWidthWithoutOverflows = 
+				    motor[i].getSensorCollection().getPulseWidthPosition() & 0xFFF;
+
+        /**
+         * Display how we've adjusted PWM to produce a QUAD signal that is
+         * absolute and continuous. Show in sensor units and in rotation
+         * degrees.
+         */
+        System.out.print("pulseWidPos:" + pulseWidthWithoutOverflows +
+                "   =>    " + "selSenPos:" + selSenPos);
+        System.out.print("      ");
+        System.out.print("pulseWidDeg:" + ToDeg(pulseWidthWithoutOverflows) +
+                "   =>    " + "selSenDeg:" + ToDeg(selSenPos));
+        System.out.println();
+
+        this.configureSimpleMagic(i);
+
       }
     }
 
@@ -43,6 +81,84 @@ public class DriveSubsystem extends SubsystemBase {
   public int getDriveEncoder(int motorNumber) {
      return (int) motor[motorNumber].getSelectedSensorPosition();
   }
+
+  public int getDriveAbsEncoder(int motorNumber) {
+    return (int) motor[motorNumber].getSensorCollection().getPulseWidthPosition() & 0xFFF;
+ }
+
+ public void setEncoderforWheelCalibration(int motorNumber){
+  int difference = getDriveAbsEncoder(motorNumber) -  wheelZeroAngleValues[motorNumber]; 
+  int encoderSetting = 0; 
+
+  System.out.println("I0 d " + difference);
+
+  if(difference < 0){
+    difference += clicksSRXPerFullRotation; 
+  }
+
+  System.out.println("I1 d " + difference);
+
+  if(difference <= clicksSRXPerFullRotation/2){
+    encoderSetting = difference; 
+
+  }
+  else{
+    encoderSetting = difference - clicksSRXPerFullRotation; 
+  }
+
+  motor[motorNumber].setSelectedSensorPosition(encoderSetting);
+
+  System.out.println("Set encoder for motor " + motorNumber + " to " + encoderSetting);
+
+ }
+
+ public void turnWheelsToZero(int i) {
+  motor[i].set(TalonSRXControlMode.MotionMagic,0);
+  System.out.println("going to 0");
+}
+
+  public void initQuadrature(int motorNumber) { // Set absolute encoders
+    int pulseWidth = motor[motorNumber].getSensorCollection().getPulseWidthPosition();
+
+    if (kDiscontinuityPresent) {
+
+			/* Calculate the center */
+			int newCenter;
+			newCenter = (kBookEnd_0 + kBookEnd_1) / 2;
+			newCenter &= 0xFFF;
+
+			/**
+			 * Apply the offset so the discontinuity is in the unused portion of
+			 * the sensor
+			 */
+			pulseWidth -= newCenter;
+    }
+
+      		/**
+		 * Mask out the bottom 12 bits to normalize to [0,4095],
+		 * or in other words, to stay within [0,360) degrees 
+		 */
+		pulseWidth = pulseWidth & 0xFFF;
+
+		/* Update Quadrature position */
+		motor[motorNumber].getSensorCollection().setQuadraturePosition(pulseWidth, kTimeoutMs);
+
+  }
+
+  /**
+	 * @param units CTRE mag encoder sensor units 
+	 * @return degrees rounded to tenths.
+	 */
+	String ToDeg(double units) {
+		double deg = units * 360.0 / 4096.0;
+
+		/* truncate to 0.1 res */
+		deg *= 10;
+		deg = (int) deg;
+		deg /= 10;
+
+		return "" + deg;
+	}
 
   public int getDriveEncoderSpeed(int motorNumber) {
     return (int) motor[motorNumber].getSelectedSensorVelocity();
@@ -69,6 +185,69 @@ public class DriveSubsystem extends SubsystemBase {
     motor[(currentTestModule-1)*2+1].set(TalonSRXControlMode.PercentOutput,0);
     motor[(currentTestModule-1)*2+2].set(TalonSRXControlMode.PercentOutput,0);
   }
+
+  public void stopMotor(int motorNumber) {
+    motor[motorNumber].set(TalonSRXControlMode.PercentOutput,0);
+  }
+
+  public void configureSimpleMagic(int i) {
+    motor[i].setSafetyEnabled(false);
+
+    /* Configure motor neutral deadband */
+    motor[i].configNeutralDeadband(0.001, 30);
+
+    motor[i].setSensorPhase(false);
+
+    motor[i].setInverted(false);
+
+    /* Set status frame periods to ensure we don't have stale data */
+    
+    motor[i].setStatusFramePeriod(StatusFrame.Status_13_Base_PIDF0, 10,
+        30);
+
+    motor[i].setStatusFramePeriod(StatusFrame.Status_10_Targets, 10,
+        30);
+    //rightmotor.setStatusFramePeriod(StatusFrame.Status_2_Feedback0, 20,
+    //    30);
+    //leftmotor.setStatusFramePeriod(StatusFrame.Status_2_Feedback0, 20,
+    //    30);
+
+    /**
+    * Max out the peak output (for all modes). However you can limit the output of
+    * a given PID object with configClosedLoopPeakOutput().
+    */
+    motor[i].configPeakOutputForward(+1.0, 30);
+    motor[i].configPeakOutputReverse(-1.0, 30);
+    motor[i].configNominalOutputForward(0, 30);
+    motor[i].configNominalOutputReverse(0, 30);    
+    
+    /* FPID Gains for each side of drivetrain */
+    motor[i].selectProfileSlot(0, 0);
+    motor[i].config_kP(0, 0.75, 30);
+    motor[i].config_kI(0, 0.005, 30);
+    motor[i].config_kD(0, 0.01,  30);
+    motor[i].config_kF(0, 0, 30);
+
+    motor[i].config_IntegralZone(0, 500,  30);
+    motor[i].configClosedLoopPeakOutput(0, 0.5, 30);
+    motor[i].configAllowableClosedloopError(0, 5, 30);
+  
+    motor[i].configClosedLoopPeriod(0, 1,
+      30);
+
+  /* Motion Magic Configurations */
+
+  /**
+   * Need to replace numbers with real measured values for acceleration and cruise
+   * vel.
+   */
+  motor[i].configMotionAcceleration(6750,
+      30);
+  motor[i].configMotionCruiseVelocity(6750,
+      30);
+  motor[i].configMotionSCurveStrength(3);
+
+}
 
   @Override
   public void periodic() {
