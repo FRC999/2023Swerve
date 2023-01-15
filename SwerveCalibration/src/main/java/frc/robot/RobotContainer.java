@@ -42,7 +42,7 @@ public class RobotContainer {
 
     driveStick = new Joystick(0);
 
-    driveSubsystem.setDefaultCommand(new TestMotorsCommand());
+    //driveSubsystem.setDefaultCommand(new TestMotorsCommand());
 
     configureBindings();
   }

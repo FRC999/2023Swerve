@@ -36,6 +36,7 @@ public class DriveSubsystem extends SubsystemBase {
   public boolean wheelsCalibrated = false;
   public final double drivePowerThreshold = 0.05; // Joystick deadband
   public double currentPIDAngle = 0;
+  public double powerReducer = 0.3;
 
   public DriveSubsystem() {
 
@@ -260,24 +261,49 @@ public class DriveSubsystem extends SubsystemBase {
   public void turnWheelsToJoystick(double y, double x) { // Set the motors
     double power = Math.sqrt(x*x + y*y);
     for (int i=1;i<9;i+=2) { // Set driving power for the Odd numbered motors
-      motor[i].set(TalonSRXControlMode.PercentOutput, power);
+      motor[i].set(TalonSRXControlMode.PercentOutput, (-1)*power*powerReducer);
     }
 
     if (power > drivePowerThreshold) { // Do not change direction of the robot on the power that is too low
 
-      double driveAngle = Math.toDegrees(Math.atan2(1,-1))-90.0;
+      double driveAngle = Math.toDegrees(Math.atan2(y,x))-90.0; // Joystick direction
       if (driveAngle<0) { driveAngle += 360;} // Now the driveAngle is a clockwise angle from the forward direction being a 0
       
-      double difference = driveAngle - currentPIDAngle; // Difference between my previous angle and current one
-      double encoderSettingAngle = 0; 
-      if(difference < 0){difference += 360.0;}
-      if(difference <= 180){ encoderSettingAngle = difference; }
-      else{ encoderSettingAngle = difference - 360;}
+      double currentAngle = currentPIDAngle % 360.0; // Current direction wheels are facing
+      if (currentAngle<0) { currentAngle+=360;}
+
+      double diffAngle = currentAngle - driveAngle; 
+      double angleIncrement;
+
+      if((Math.abs(diffAngle) >= 180 && currentAngle>driveAngle) || (Math.abs(diffAngle) < 180 && currentAngle < driveAngle)){
+        // CounterClockwise, positive increment
+        if (driveAngle>=currentAngle) { angleIncrement = driveAngle - currentAngle; }
+        else { angleIncrement = driveAngle+360.0 - currentAngle; }
+        }
+      else{
+         // Clockwise, negative increment
+         System.out.println("clockwise");
+         if (currentAngle >=driveAngle) { angleIncrement = driveAngle - currentAngle; }
+         else { angleIncrement = -(currentAngle+360.0 - driveAngle); }
+      }
+
+      if (angleIncrement == 360.0 || angleIncrement == -360.0) {angleIncrement=0;}
+
+      System.out.println("C: " + currentPIDAngle + "CA: " + currentAngle + " J: " + driveAngle + " I: " + angleIncrement);
+
+    
+      //double difference = driveAngle - currentPIDAngle; // Difference between my previous angle and current one
+      //double encoderSettingAngle = 0; 
+      //if(difference < 0){difference += 360.0;}
+      //if(difference <= 180){ encoderSettingAngle = difference; }
+      //else{ encoderSettingAngle = difference - 360;}
     
       for (int i=2;i<9;i+=2) { // Set turning PID for the Even numbered motors
-        motor[i].set(TalonSRXControlMode.MotionMagic, Math.);
+        motor[i].set(TalonSRXControlMode.MotionMagic, (currentPIDAngle+angleIncrement)*clicksSRXPerFullRotation/360.0);
       }
-      currentPIDAngle = driveAngle;
+      System.out.println("CPAB: "+ currentPIDAngle);
+      currentPIDAngle += angleIncrement;
+      System.out.println("CPA: "+ currentPIDAngle);
     }
   }
 
