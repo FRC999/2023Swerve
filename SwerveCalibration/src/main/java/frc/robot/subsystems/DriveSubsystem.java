@@ -31,7 +31,11 @@ public class DriveSubsystem extends SubsystemBase {
   final int[] wheelZeroAngleValues = {0, 0, 3489, 0, 3307, 0, 433, 0, 3268};
   public final int turnPIDTolerance = 3; 
 
-  final int clicksSRXPerFullRotation = 4096; 
+  final int clicksSRXPerFullRotation = 4096;
+
+  public boolean wheelsCalibrated = false;
+  public final double drivePowerThreshold = 0.05; // Joystick deadband
+  public double currentPIDAngle = 0;
 
   public DriveSubsystem() {
 
@@ -90,13 +94,13 @@ public class DriveSubsystem extends SubsystemBase {
   int difference = getDriveAbsEncoder(motorNumber) -  wheelZeroAngleValues[motorNumber]; 
   int encoderSetting = 0; 
 
-  System.out.println("I0 d " + difference);
+  //System.out.println("I0 d " + difference);
 
   if(difference < 0){
     difference += clicksSRXPerFullRotation; 
   }
 
-  System.out.println("I1 d " + difference);
+  //System.out.println("I1 d " + difference);
 
   if(difference <= clicksSRXPerFullRotation/2){
     encoderSetting = difference; 
@@ -113,37 +117,37 @@ public class DriveSubsystem extends SubsystemBase {
  }
 
  public void turnWheelsToZero(int i) {
-  motor[i].set(TalonSRXControlMode.MotionMagic,0);
-  System.out.println("going to 0");
-}
+   motor[i].set(TalonSRXControlMode.MotionMagic, 0);
+   System.out.println("going to 0");
+ }
 
-  public void initQuadrature(int motorNumber) { // Set absolute encoders
-    int pulseWidth = motor[motorNumber].getSensorCollection().getPulseWidthPosition();
+ public void initQuadrature(int motorNumber) { // Set absolute encoders
+   int pulseWidth = motor[motorNumber].getSensorCollection().getPulseWidthPosition();
 
-    if (kDiscontinuityPresent) {
+   if (kDiscontinuityPresent) {
 
-			/* Calculate the center */
-			int newCenter;
-			newCenter = (kBookEnd_0 + kBookEnd_1) / 2;
-			newCenter &= 0xFFF;
+     /* Calculate the center */
+     int newCenter;
+     newCenter = (kBookEnd_0 + kBookEnd_1) / 2;
+     newCenter &= 0xFFF;
 
-			/**
-			 * Apply the offset so the discontinuity is in the unused portion of
-			 * the sensor
-			 */
-			pulseWidth -= newCenter;
-    }
+     /**
+      * Apply the offset so the discontinuity is in the unused portion of
+      * the sensor
+      */
+     pulseWidth -= newCenter;
+   }
 
-      		/**
-		 * Mask out the bottom 12 bits to normalize to [0,4095],
-		 * or in other words, to stay within [0,360) degrees 
-		 */
-		pulseWidth = pulseWidth & 0xFFF;
+   /**
+    * Mask out the bottom 12 bits to normalize to [0,4095],
+    * or in other words, to stay within [0,360) degrees
+    */
+   pulseWidth = pulseWidth & 0xFFF;
 
-		/* Update Quadrature position */
-		motor[motorNumber].getSensorCollection().setQuadraturePosition(pulseWidth, kTimeoutMs);
+   /* Update Quadrature position */
+   motor[motorNumber].getSensorCollection().setQuadraturePosition(pulseWidth, kTimeoutMs);
 
-  }
+ }
 
   /**
 	 * @param units CTRE mag encoder sensor units 
@@ -247,7 +251,35 @@ public class DriveSubsystem extends SubsystemBase {
       30);
   motor[i].configMotionSCurveStrength(3);
 
-}
+  }
+
+  public boolean areWheelsCalibrated() {
+    return wheelsCalibrated;
+  }
+
+  public void turnWheelsToJoystick(double y, double x) { // Set the motors
+    double power = Math.sqrt(x*x + y*y);
+    for (int i=1;i<9;i+=2) { // Set driving power for the Odd numbered motors
+      motor[i].set(TalonSRXControlMode.PercentOutput, power);
+    }
+
+    if (power > drivePowerThreshold) { // Do not change direction of the robot on the power that is too low
+
+      double driveAngle = Math.toDegrees(Math.atan2(1,-1))-90.0;
+      if (driveAngle<0) { driveAngle += 360;} // Now the driveAngle is a clockwise angle from the forward direction being a 0
+      
+      double difference = driveAngle - currentPIDAngle; // Difference between my previous angle and current one
+      double encoderSettingAngle = 0; 
+      if(difference < 0){difference += 360.0;}
+      if(difference <= 180){ encoderSettingAngle = difference; }
+      else{ encoderSettingAngle = difference - 360;}
+    
+      for (int i=2;i<9;i+=2) { // Set turning PID for the Even numbered motors
+        motor[i].set(TalonSRXControlMode.MotionMagic, Math.);
+      }
+      currentPIDAngle = driveAngle;
+    }
+  }
 
   @Override
   public void periodic() {

@@ -36,6 +36,7 @@ public class ZeroWheelHeading extends CommandBase {
       RobotContainer.driveSubsystem.stopMotor(motorNumber);
       System.out.println("Motor "+ motorNumber + "calibrated i:" + interrupted);
     }
+    RobotContainer.driveSubsystem.wheelsCalibrated = true;
   }
 
   // Returns true when the command should end.

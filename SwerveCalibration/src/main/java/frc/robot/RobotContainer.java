@@ -6,6 +6,7 @@ package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.commands.Autos;
+import frc.robot.commands.DriveWithJoystick;
 import frc.robot.commands.ExampleCommand;
 import frc.robot.commands.TestMotorsCommand;
 import frc.robot.commands.ZeroWheelHeading;
@@ -75,6 +76,11 @@ public class RobotContainer {
         .onTrue(new ZeroWheelHeading())
         .onFalse(new InstantCommand(RobotContainer.driveSubsystem::stopCurrentMotors)); 
       
+
+    Trigger wheelCalibration = new Trigger(driveSubsystem::areWheelsCalibrated);
+    new JoystickButton(driveStick, 1).and(wheelCalibration)
+      .whileTrue(new DriveWithJoystick())
+      .onFalse(new InstantCommand(RobotContainer.driveSubsystem::stopCurrentMotors)); 
 
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
     // cancelling on release.
